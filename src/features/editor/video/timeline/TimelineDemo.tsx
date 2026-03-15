@@ -1,9 +1,21 @@
-import { useMemo, useRef, useState, type MouseEvent } from "react";
-
+import {
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+} from "react";
 import { getTicks } from "./helpers";
-import { ACTION_ROWS } from "./mock";
 import { PRESET_COLORS } from "./constants";
-import type { ActionType, SelectedAction, TimelineAction } from "./type";
+import type {
+  ActionType,
+  SelectedAction,
+  TimelineAction,
+  TimelineRow,
+} from "./type";
+import { useModelStore } from "../../../../store/useModelStrore";
+import type { ModelType } from "../../../../types/editor";
+import { INIT_ACTION } from "../../../../constants/editor";
 
 interface TimelineDemoProps {
   duration?: number;
@@ -49,7 +61,10 @@ const TimelineDemo = ({
   withLabel = WIDTH_LABEL,
   hightRow = HIGHT_ROW,
 }: TimelineDemoProps) => {
-  const [rows, setRows] = useState(ACTION_ROWS);
+  const selectedModel = useModelStore((state) => state.selectedModel);
+  const setSelectedModel = useModelStore((state) => state.setSelectedModel);
+  const animations = selectedModel?.animations || ([] as TimelineRow[]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<SelectedAction | null>(null);
 
@@ -80,55 +95,66 @@ const TimelineDemo = ({
   const handleResize = (e: MouseEvent, rowId: string) => {
     if (!selected) return;
     if (selected.type !== "resize") return;
+    if (!selectedModel) return;
     e.stopPropagation();
     const clientX = e.clientX;
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-        const newActions = row.actions.map((action) => {
-          if (action.id !== selected.id) return action;
-          const newEnd = covertPositionToTime(clientX);
-          return {
-            ...action,
-            end: newEnd > action.start + MIN_DURATION ? newEnd : action.end,
-          };
-        });
+
+    const newAnimations = animations.map((row) => {
+      if (row.id !== rowId) return row;
+      const newActions = row.actions.map((action) => {
+        if (action.id !== selected.id) return action;
+        const newEnd = covertPositionToTime(clientX);
         return {
-          ...row,
-          actions: newActions,
+          ...action,
+          end: newEnd > action.start + MIN_DURATION ? newEnd : action.end,
         };
-      }),
-    );
+      });
+      return {
+        ...row,
+        actions: newActions,
+      };
+    });
+    const updateModel: ModelType = {
+      ...selectedModel,
+      animations: newAnimations,
+    };
+    setSelectedModel(updateModel);
   };
 
   const handleDrag = (e: MouseEvent, rowId: string) => {
     if (!selected) return;
     if (selected.type !== "move") return;
+    if (!selectedModel) return;
     e.stopPropagation();
     const clientX = e.clientX;
-    setRows((prev) =>
-      prev.map((row) => {
-        if (row.id !== rowId) return row;
-        const newActions = row.actions.map((action) => {
-          if (action.id !== selected.id) return action;
-          const time = covertPositionToTime(clientX);
-          const currentTime = selected.currentTime;
-          const delta = time - currentTime;
-          const newStart = selected.start + delta;
-          const newEnd = selected.end + delta;
-          if (newStart < 0 || newEnd > duration) return action;
-          return {
-            ...action,
-            end: newEnd,
-            start: newStart,
-          };
-        });
+
+    const newAnimations = animations.map((row) => {
+      if (row.id !== rowId) return row;
+      const newActions = row.actions.map((action) => {
+        if (action.id !== selected.id) return action;
+        const time = covertPositionToTime(clientX);
+        const currentTime = selected.currentTime;
+        const delta = time - currentTime;
+        const newStart = selected.start + delta;
+        const newEnd = selected.end + delta;
+        if (newStart < 0 || newEnd > duration) return action;
         return {
-          ...row,
-          actions: newActions,
+          ...action,
+          end: newEnd,
+          start: newStart,
         };
-      }),
-    );
+      });
+      return {
+        ...row,
+        actions: newActions,
+      };
+    });
+
+    const updateModel: ModelType = {
+      ...selectedModel!,
+      animations: newAnimations,
+    };
+    setSelectedModel(updateModel);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -148,6 +174,38 @@ const TimelineDemo = ({
     setSelected(null);
   };
 
+  const handleDragStart = (e: DragEvent, field: string) => {
+    console.log("handleDragStart", { field });
+    if (!selectedModel) return;
+    e.dataTransfer.setData("type", field);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    if (!selectedModel) return;
+    e.preventDefault();
+
+    const initAction: TimelineAction = {
+      ...INIT_ACTION,
+      id: `1`,
+    };
+    const type = e.dataTransfer.getData("type");
+    const newAnimations = animations.map((row) => {
+      if (row.id !== type) return row;
+      return {
+        ...row,
+        actions: [...row.actions, initAction],
+      };
+    });
+    const updateModel: ModelType = {
+      ...selectedModel!,
+      animations: newAnimations,
+    };
+    setSelectedModel(updateModel);
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+  };
   return (
     <div className="border flex relative min-w-full bg-[#0e1018]  border-[#252840] rounded-lg text-white">
       <div>
@@ -159,9 +217,11 @@ const TimelineDemo = ({
         </div>
         {ROWS.map(({ id, name }) => (
           <div
+            draggable
             key={`label_${id}`}
             className="border-b border-r"
             style={{ width: withLabel, height: HIGHT_ROW }}
+            onDragStart={(e) => handleDragStart(e, id)}
           >
             <span>{name}</span>
           </div>
@@ -193,6 +253,8 @@ const TimelineDemo = ({
         <div
           style={{ width: `${totalWidth}px` }}
           className="bg-[#0a0c14]  border-indigo-50 "
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
         >
           <div className="border-b " style={{ height: hightRow }}>
             {ticks.map((tick) => (
@@ -219,7 +281,7 @@ const TimelineDemo = ({
             ))}
           </div>
 
-          {rows.map(({ actions, id }, index) => {
+          {animations.map(({ actions, id }, index) => {
             const color = PRESET_COLORS[index % PRESET_COLORS.length];
             return actions.map((action) => (
               <div

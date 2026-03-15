@@ -9,3 +9,7 @@ export const formatVideoTime = (time: number) => {
 
   return `${mm}:${ss}:${ms}`;
 };
+
+export const convertNumber = (value: number) => {
+  return Number(value.toFixed(4));
+};

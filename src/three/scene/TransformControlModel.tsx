@@ -4,6 +4,7 @@ import { Mesh } from "three";
 import { useModelStore } from "../../store/useModelStrore";
 import Model from "../materials/models/Model";
 import cloneDeep from "lodash.clonedeep";
+import { convertNumber } from "../../utils/format";
 const TransformControlModel = () => {
   const ref = useRef<Mesh>(null!);
   const selectedModel = useModelStore((state) => state.selectedModel);
@@ -14,9 +15,21 @@ const TransformControlModel = () => {
     if (!ref?.current || !selectedModel) return;
 
     const { position, rotation, scale } = ref.current;
-    const newPosition = { x: position.x, y: position.y, z: position.z };
-    const newRotation = { x: rotation.x, y: rotation.y, z: rotation.z };
-    const newScale = { x: scale.x, y: scale.y, z: scale.z };
+    const newPosition = {
+      x: convertNumber(position.x),
+      y: convertNumber(position.y),
+      z: convertNumber(position.z),
+    };
+    const newRotation = {
+      x: convertNumber(rotation.x),
+      y: convertNumber(rotation.y),
+      z: convertNumber(rotation.z),
+    };
+    const newScale = {
+      x: convertNumber(scale.x),
+      y: convertNumber(scale.y),
+      z: convertNumber(scale.z),
+    };
     const updateModel = {
       ...selectedModel,
       position: newPosition,

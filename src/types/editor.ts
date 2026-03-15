@@ -1,3 +1,5 @@
+import type { TimelineRow } from "../features/editor/video/timeline/type";
+
 export interface VectorType {
   x: number;
   y: number;
@@ -11,4 +13,5 @@ export interface ModelType {
   position: VectorType;
   rotation: VectorType;
   scale: VectorType;
+  animations: TimelineRow[];
 }
